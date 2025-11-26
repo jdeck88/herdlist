@@ -1,6 +1,8 @@
 import { db } from "./db";
 import { eq, sql, and, or, gte, desc } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/mysql-core";
+
+import crypto from "crypto";
 import {
   animals,
   properties,
@@ -102,7 +104,13 @@ export interface IStorage {
   // User operations for authentication
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
-  createUser(user: { email: string; passwordHash: string; firstName?: string; lastName?: string; isAdmin?: string }): Promise<User>;
+  createUser(user: {
+    email: string;
+    passwordHash: string;
+    firstName?: string;
+    lastName?: string;
+    isAdmin?: string;
+  }): Promise<User>;
   getAllUsers(): Promise<User[]>;
   updateUserAdminStatus(id: string, isAdmin: string): Promise<User | undefined>;
   updateUserPassword(id: string, passwordHash: string): Promise<User | undefined>;
@@ -112,16 +120,24 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // Animals
+  // ---------- Animals ----------
+
   async createAnimal(animal: InsertAnimal): Promise<Animal> {
-    const [newAnimal] = await db.insert(animals).values(animal).returning();
-    return newAnimal;
+    const id = crypto.randomUUID();
+
+    await db.insert(animals).values({
+      ...(animal as any),
+      id,
+    });
+
+    const [created] = await db.select().from(animals).where(eq(animals.id, id));
+    return created as Animal;
   }
 
   async getAllAnimals(): Promise<Animal[]> {
-    const sireAnimals = alias(animals, 'sire_animals');
-    const damAnimals = alias(animals, 'dam_animals');
-    
+    const sireAnimals = alias(animals, "sire_animals");
+    const damAnimals = alias(animals, "dam_animals");
+
     const result = await db
       .select({
         id: animals.id,
@@ -143,7 +159,7 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(fields, eq(animals.currentFieldId, fields.id))
       .leftJoin(sireAnimals, eq(animals.sireId, sireAnimals.id))
       .leftJoin(damAnimals, eq(animals.damId, damAnimals.id));
-    
+
     return result as Animal[];
   }
 
@@ -153,11 +169,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateAnimal(id: string, animal: Partial<InsertAnimal>): Promise<Animal | undefined> {
-    const [updated] = await db
-      .update(animals)
-      .set(animal)
-      .where(eq(animals.id, id))
-      .returning();
+    await db.update(animals).set(animal).where(eq(animals.id, id));
+    const [updated] = await db.select().from(animals).where(eq(animals.id, id));
     return updated;
   }
 
@@ -168,6 +181,7 @@ export class DatabaseStorage implements IStorage {
   async getAnimalsReadyToBreed(): Promise<Animal[]> {
     const fiftySevenDaysAgo = new Date();
     fiftySevenDaysAgo.setDate(fiftySevenDaysAgo.getDate() - 57);
+    const dateString = fiftySevenDaysAgo.toISOString().split("T")[0];
 
     const result = await db
       .select({
@@ -188,12 +202,12 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(
           eq(animals.sex, "Female"),
-          sql`${calvingRecords.calvingDate} <= ${fiftySevenDaysAgo.toISOString().split('T')[0]}`
-        )
+          sql`${calvingRecords.calvingDate} <= ${dateString}`,
+        ),
       )
       .groupBy(animals.id);
 
-    return result;
+    return result as Animal[];
   }
 
   async getOffspringByParentId(parentId: string): Promise<Animal[]> {
@@ -214,20 +228,18 @@ export class DatabaseStorage implements IStorage {
       })
       .from(animals)
       .leftJoin(fields, eq(animals.currentFieldId, fields.id))
-      .where(
-        or(
-          eq(animals.sireId, parentId),
-          eq(animals.damId, parentId)
-        )
-      );
-    
+      .where(or(eq(animals.sireId, parentId), eq(animals.damId, parentId)));
+
     return result as Animal[];
   }
 
-  // Properties
+  // ---------- Properties ----------
+
   async createProperty(property: InsertProperty): Promise<Property> {
-    const [newProperty] = await db.insert(properties).values(property).returning();
-    return newProperty;
+    const id = crypto.randomUUID();
+    await db.insert(properties).values({ ...(property as any), id });
+    const [created] = await db.select().from(properties).where(eq(properties.id, id));
+    return created as Property;
   }
 
   async getAllProperties(): Promise<Property[]> {
@@ -240,11 +252,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProperty(id: string, property: Partial<InsertProperty>): Promise<Property | undefined> {
-    const [updated] = await db
-      .update(properties)
-      .set(property)
-      .where(eq(properties.id, id))
-      .returning();
+    await db.update(properties).set(property).where(eq(properties.id, id));
+    const [updated] = await db.select().from(properties).where(eq(properties.id, id));
     return updated;
   }
 
@@ -252,10 +261,13 @@ export class DatabaseStorage implements IStorage {
     await db.delete(properties).where(eq(properties.id, id));
   }
 
-  // Fields
+  // ---------- Fields ----------
+
   async createField(field: InsertField): Promise<Field> {
-    const [newField] = await db.insert(fields).values(field).returning();
-    return newField;
+    const id = crypto.randomUUID();
+    await db.insert(fields).values({ ...(field as any), id });
+    const [created] = await db.select().from(fields).where(eq(fields.id, id));
+    return created as Field;
   }
 
   async getAllFields(): Promise<Field[]> {
@@ -272,11 +284,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateField(id: string, field: Partial<InsertField>): Promise<Field | undefined> {
-    const [updated] = await db
-      .update(fields)
-      .set(field)
-      .where(eq(fields.id, id))
-      .returning();
+    await db.update(fields).set(field).where(eq(fields.id, id));
+    const [updated] = await db.select().from(fields).where(eq(fields.id, id));
     return updated;
   }
 
@@ -288,8 +297,8 @@ export class DatabaseStorage implements IStorage {
     const result = await db
       .select({
         property: properties.name,
-        dairy: sql<number>`count(case when ${animals.type} = 'dairy' then 1 end)::int`,
-        beef: sql<number>`count(case when ${animals.type} = 'beef' then 1 end)::int`,
+        dairy: sql<number>`count(case when ${animals.type} = 'dairy' then 1 end)`,
+        beef: sql<number>`count(case when ${animals.type} = 'beef' then 1 end)`,
       })
       .from(properties)
       .leftJoin(fields, eq(properties.id, fields.propertyId))
@@ -299,24 +308,27 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  // Movements
+  // ---------- Movements ----------
+
   async createMovement(movement: InsertMovement): Promise<Movement> {
-    const [newMovement] = await db.insert(movements).values(movement).returning();
-    
+    const id = crypto.randomUUID();
+    await db.insert(movements).values({ ...(movement as any), id });
+
     if (movement.toFieldId) {
       await db
         .update(animals)
         .set({ currentFieldId: movement.toFieldId })
         .where(eq(animals.id, movement.animalId));
     }
-    
-    return newMovement;
+
+    const [created] = await db.select().from(movements).where(eq(movements.id, id));
+    return created as Movement;
   }
 
   async getMovementsByAnimalId(animalId: string): Promise<Movement[]> {
-    const fromFields = alias(fields, 'from_fields');
-    const toFields = alias(fields, 'to_fields');
-    
+    const fromFields = alias(fields, "from_fields");
+    const toFields = alias(fields, "to_fields");
+
     const result = await db
       .select({
         id: movements.id,
@@ -334,14 +346,14 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(toFields, eq(movements.toFieldId, toFields.id))
       .where(eq(movements.animalId, animalId))
       .orderBy(desc(movements.movementDate));
-    
+
     return result as Movement[];
   }
 
   async getRecentMovements(limit: number = 10): Promise<Movement[]> {
-    const fromFields = alias(fields, 'from_fields');
-    const toFields = alias(fields, 'to_fields');
-    
+    const fromFields = alias(fields, "from_fields");
+    const toFields = alias(fields, "to_fields");
+
     const result = await db
       .select({
         id: movements.id,
@@ -359,14 +371,17 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(toFields, eq(movements.toFieldId, toFields.id))
       .orderBy(desc(movements.movementDate))
       .limit(limit);
-    
+
     return result as Movement[];
   }
 
-  // Vaccinations
+  // ---------- Vaccinations ----------
+
   async createVaccination(vaccination: InsertVaccination): Promise<Vaccination> {
-    const [newVaccination] = await db.insert(vaccinations).values(vaccination).returning();
-    return newVaccination;
+    const id = crypto.randomUUID();
+    await db.insert(vaccinations).values({ ...(vaccination as any), id });
+    const [created] = await db.select().from(vaccinations).where(eq(vaccinations.id, id));
+    return created as Vaccination;
   }
 
   async getVaccinationsByAnimalId(animalId: string): Promise<Vaccination[]> {
@@ -377,12 +392,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(vaccinations.administeredDate));
   }
 
-  async updateVaccination(id: string, vaccination: Partial<InsertVaccination>): Promise<Vaccination | undefined> {
-    const [updated] = await db
-      .update(vaccinations)
-      .set(vaccination)
-      .where(eq(vaccinations.id, id))
-      .returning();
+  async updateVaccination(
+    id: string,
+    vaccination: Partial<InsertVaccination>,
+  ): Promise<Vaccination | undefined> {
+    await db.update(vaccinations).set(vaccination).where(eq(vaccinations.id, id));
+    const [updated] = await db.select().from(vaccinations).where(eq(vaccinations.id, id));
     return updated;
   }
 
@@ -390,10 +405,13 @@ export class DatabaseStorage implements IStorage {
     await db.delete(vaccinations).where(eq(vaccinations.id, id));
   }
 
-  // Events
+  // ---------- Events ----------
+
   async createEvent(event: InsertEvent): Promise<Event> {
-    const [newEvent] = await db.insert(events).values(event).returning();
-    return newEvent;
+    const id = crypto.randomUUID();
+    await db.insert(events).values({ ...(event as any), id });
+    const [created] = await db.select().from(events).where(eq(events.id, id));
+    return created as Event;
   }
 
   async getEventsByAnimalId(animalId: string): Promise<Event[]> {
@@ -405,11 +423,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateEvent(id: string, event: Partial<InsertEvent>): Promise<Event | undefined> {
-    const [updated] = await db
-      .update(events)
-      .set(event)
-      .where(eq(events.id, id))
-      .returning();
+    await db.update(events).set(event).where(eq(events.id, id));
+    const [updated] = await db.select().from(events).where(eq(events.id, id));
     return updated;
   }
 
@@ -417,10 +432,13 @@ export class DatabaseStorage implements IStorage {
     await db.delete(events).where(eq(events.id, id));
   }
 
-  // Calving Records
+  // ---------- Calving Records ----------
+
   async createCalvingRecord(record: InsertCalvingRecord): Promise<CalvingRecord> {
-    const [newRecord] = await db.insert(calvingRecords).values(record).returning();
-    return newRecord;
+    const id = crypto.randomUUID();
+    await db.insert(calvingRecords).values({ ...(record as any), id });
+    const [created] = await db.select().from(calvingRecords).where(eq(calvingRecords.id, id));
+    return created as CalvingRecord;
   }
 
   async getCalvingRecordsByDamId(damId: string): Promise<CalvingRecord[]> {
@@ -431,12 +449,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(calvingRecords.calvingDate));
   }
 
-  async updateCalvingRecord(id: string, record: Partial<InsertCalvingRecord>): Promise<CalvingRecord | undefined> {
-    const [updated] = await db
-      .update(calvingRecords)
-      .set(record)
-      .where(eq(calvingRecords.id, id))
-      .returning();
+  async updateCalvingRecord(
+    id: string,
+    record: Partial<InsertCalvingRecord>,
+  ): Promise<CalvingRecord | undefined> {
+    await db.update(calvingRecords).set(record).where(eq(calvingRecords.id, id));
+    const [updated] = await db.select().from(calvingRecords).where(eq(calvingRecords.id, id));
     return updated;
   }
 
@@ -444,10 +462,13 @@ export class DatabaseStorage implements IStorage {
     await db.delete(calvingRecords).where(eq(calvingRecords.id, id));
   }
 
-  // Slaughter Records
+  // ---------- Slaughter Records ----------
+
   async createSlaughterRecord(record: InsertSlaughterRecord): Promise<SlaughterRecord> {
-    const [newRecord] = await db.insert(slaughterRecords).values(record).returning();
-    return newRecord;
+    const id = crypto.randomUUID();
+    await db.insert(slaughterRecords).values({ ...(record as any), id });
+    const [created] = await db.select().from(slaughterRecords).where(eq(slaughterRecords.id, id));
+    return created as SlaughterRecord;
   }
 
   async getAllSlaughterRecords(): Promise<SlaughterRecord[]> {
@@ -463,43 +484,81 @@ export class DatabaseStorage implements IStorage {
     await db.delete(slaughterRecords).where(eq(slaughterRecords.id, id));
   }
 
-  // Bulk Import
+  // ---------- Bulk Import ----------
+
   async bulkCreateAnimals(animalList: InsertAnimal[]): Promise<Animal[]> {
     if (animalList.length === 0) return [];
-    return await db.insert(animals).values(animalList).returning();
+    // We don't actually use the returned rows in the importer, just insert
+    const withIds = animalList.map((a) => ({
+      ...(a as any),
+      id: crypto.randomUUID(),
+    }));
+    await db.insert(animals).values(withIds);
+    return [];
   }
 
   async bulkCreateProperties(propertyList: InsertProperty[]): Promise<Property[]> {
     if (propertyList.length === 0) return [];
-    return await db.insert(properties).values(propertyList).returning();
+    const withIds = propertyList.map((p) => ({
+      ...(p as any),
+      id: crypto.randomUUID(),
+    }));
+    await db.insert(properties).values(withIds);
+    return [];
   }
 
   async bulkCreateFields(fieldList: InsertField[]): Promise<Field[]> {
     if (fieldList.length === 0) return [];
-    return await db.insert(fields).values(fieldList).returning();
+    const withIds = fieldList.map((f) => ({
+      ...(f as any),
+      id: crypto.randomUUID(),
+    }));
+    await db.insert(fields).values(withIds);
+    return [];
   }
 
   async bulkCreateVaccinations(vaccinationList: InsertVaccination[]): Promise<Vaccination[]> {
     if (vaccinationList.length === 0) return [];
-    return await db.insert(vaccinations).values(vaccinationList).returning();
+    const withIds = vaccinationList.map((v) => ({
+      ...(v as any),
+      id: crypto.randomUUID(),
+    }));
+    await db.insert(vaccinations).values(withIds);
+    return [];
   }
 
   async bulkCreateEvents(eventList: InsertEvent[]): Promise<Event[]> {
     if (eventList.length === 0) return [];
-    return await db.insert(events).values(eventList).returning();
+    const withIds = eventList.map((e) => ({
+      ...(e as any),
+      id: crypto.randomUUID(),
+    }));
+    await db.insert(events).values(withIds);
+    return [];
   }
 
   async bulkCreateCalvingRecords(recordList: InsertCalvingRecord[]): Promise<CalvingRecord[]> {
     if (recordList.length === 0) return [];
-    return await db.insert(calvingRecords).values(recordList).returning();
+    const withIds = recordList.map((r) => ({
+      ...(r as any),
+      id: crypto.randomUUID(),
+    }));
+    await db.insert(calvingRecords).values(withIds);
+    return [];
   }
 
   async bulkCreateSlaughterRecords(recordList: InsertSlaughterRecord[]): Promise<SlaughterRecord[]> {
     if (recordList.length === 0) return [];
-    return await db.insert(slaughterRecords).values(recordList).returning();
+    const withIds = recordList.map((r) => ({
+      ...(r as any),
+      id: crypto.randomUUID(),
+    }));
+    await db.insert(slaughterRecords).values(withIds);
+    return [];
   }
 
-  // Lookup helpers for imports
+  // ---------- Lookup helpers ----------
+
   async getAnimalByTagNumber(tagNumber: string): Promise<Animal | undefined> {
     const [animal] = await db.select().from(animals).where(eq(animals.tagNumber, tagNumber));
     return animal;
@@ -511,13 +570,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getFieldByNameAndProperty(fieldName: string, propertyId: string): Promise<Field | undefined> {
-    const [field] = await db.select().from(fields).where(
-      and(eq(fields.name, fieldName), eq(fields.propertyId, propertyId))
-    );
+    const [field] = await db
+      .select()
+      .from(fields)
+      .where(and(eq(fields.name, fieldName), eq(fields.propertyId, propertyId)));
     return field;
   }
 
-  // User operations for authentication
+  // ---------- Users / Auth ----------
+
   async getUser(id: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
@@ -528,52 +589,65 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async createUser(userData: { email: string; passwordHash: string; firstName?: string; lastName?: string; isAdmin?: string }): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values({
-        email: userData.email,
-        passwordHash: userData.passwordHash,
-        firstName: userData.firstName || null,
-        lastName: userData.lastName || null,
-        isAdmin: userData.isAdmin || "no",
-      })
-      .returning();
-    return user;
+  async createUser(userData: {
+    email: string;
+    passwordHash: string;
+    firstName?: string;
+    lastName?: string;
+    isAdmin?: string;
+  }): Promise<User> {
+    const id = crypto.randomUUID();
+
+    await db.insert(users).values({
+      id,
+      email: userData.email,
+      passwordHash: userData.passwordHash,
+      firstName: userData.firstName || null,
+      lastName: userData.lastName || null,
+      isAdmin: userData.isAdmin || "no",
+    });
+
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user as User;
   }
 
   async getAllUsers(): Promise<User[]> {
     return await db.select().from(users);
   }
 
-  async updateUserAdminStatus(id: string, isAdmin: string): Promise<User | undefined> {
-    const [user] = await db
+  async updateUserAdminStatus(id: string, isAdminValue: string): Promise<User | undefined> {
+    await db
       .update(users)
-      .set({ isAdmin, updatedAt: new Date() })
-      .where(eq(users.id, id))
-      .returning();
-    return user;
+      .set({ isAdmin: isAdminValue, updatedAt: new Date() })
+      .where(eq(users.id, id));
+
+    return this.getUser(id);
   }
 
   async updateUserPassword(id: string, passwordHash: string): Promise<User | undefined> {
-    const [user] = await db
+    await db
       .update(users)
       .set({ passwordHash, updatedAt: new Date() })
-      .where(eq(users.id, id))
-      .returning();
-    return user;
+      .where(eq(users.id, id));
+
+    return this.getUser(id);
   }
 
-  async setPasswordResetToken(email: string, token: string, expires: Date): Promise<User | undefined> {
-    const [user] = await db
+  async setPasswordResetToken(
+    email: string,
+    token: string,
+    expires: Date,
+  ): Promise<User | undefined> {
+    await db
       .update(users)
-      .set({ 
+      .set({
         passwordResetToken: token,
         passwordResetExpires: expires,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
-      .where(eq(users.email, email))
-      .returning();
+      .where(eq(users.email, email));
+
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 
@@ -581,27 +655,24 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .select()
       .from(users)
-      .where(
-        and(
-          eq(users.passwordResetToken, token),
-          gte(users.passwordResetExpires, new Date())
-        )
-      );
+      .where(and(eq(users.passwordResetToken, token), gte(users.passwordResetExpires, new Date())));
+
     return user;
   }
 
   async clearPasswordResetToken(id: string): Promise<User | undefined> {
-    const [user] = await db
+    await db
       .update(users)
-      .set({ 
+      .set({
         passwordResetToken: null,
         passwordResetExpires: null,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
-      .where(eq(users.id, id))
-      .returning();
-    return user;
+      .where(eq(users.id, id));
+
+    return this.getUser(id);
   }
 }
 
 export const storage = new DatabaseStorage();
+

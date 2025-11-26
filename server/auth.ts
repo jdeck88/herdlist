@@ -76,17 +76,22 @@ export async function setupAuth(app: Express) {
       },
       async (email, password, done) => {
         try {
+		  console.log("starting...")
           const user = await storage.getUserByEmail(email);
+		  console.log(user)
           
           if (!user) {
             return done(null, false, { message: "Invalid email or password" });
           }
+		  console.log("checking password...")
 
           const isValidPassword = await verifyPassword(password, user.passwordHash);
           
           if (!isValidPassword) {
+		  	console.log("password is bad...")
             return done(null, false, { message: "Invalid email or password" });
           }
+		  	console.log("password is good...")
 
           // Don't include password hash in session
           const { passwordHash, passwordResetToken, passwordResetExpires, ...userWithoutSensitive } = user;

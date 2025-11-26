@@ -78,29 +78,19 @@ NODE_ENV=development
 PORT=3005
 ```
 
-Generate a secure session secret:
 
-```bash
-openssl rand -base64 32
-```
 
-### 5. Create Admin User
-
-```bash
-node -e "const bcrypt = require('bcrypt'); bcrypt.hash('admin123', 10).then(hash => console.log(hash));"
-```
-
-Then insert into database:
-
-```sql
-INSERT INTO users (id, email, password_hash, first_name, last_name, is_admin)
-VALUES (UUID(), 'admin@example.com', 'YOUR_HASH_HERE', 'Admin', 'User', 'yes');
-```
-
-### 6. Start Development Server
+### 5. Start Development Server
 
 ```bash
 npm run dev
+```
+
+
+### 6. Create Admin User
+
+```bash
+curl -X POST http://localhost:5001/api/auth/signup   -H "Content-Type: application/json"   -d '{"email":"user@example.com","password":"admin123","firstName":"Admin","lastName":"User", "is_admin":"yes"}'
 ```
 
 Visit `http://localhost:3005` and log in with your admin credentials.
