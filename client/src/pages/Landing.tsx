@@ -93,12 +93,6 @@ export default function Landing() {
             </ul>
           </div>
 
-          <div className="mt-6 space-y-2 text-xs text-center text-muted-foreground">
-            <p>Default accounts for testing:</p>
-            <p>Admin: jdeck88@gmail.com / admin123</p>
-            <p>User: deckfamilyfarm@gmail.com / user123</p>
-            <p className="text-destructive">⚠️ Change passwords after first login</p>
-          </div>
         </CardContent>
       </Card>
     </div>

@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_NAME="herdlist-db"
-APP_PORT=3005
+APP_PORT=5001
 
 cd "$APP_DIR"
 
