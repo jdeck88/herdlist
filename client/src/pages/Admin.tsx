@@ -1,9 +1,22 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -18,13 +31,15 @@ export default function Admin() {
     queryKey: ["/api/admin/users"],
   });
 
-  const { data: whitelist = [], isLoading: whitelistLoading } = useQuery<EmailWhitelist[]>({
-    queryKey: ["/api/admin/whitelist"],
-  });
+  const { data: whitelist = [], isLoading: whitelistLoading } =
+    useQuery<EmailWhitelist[]>({
+      queryKey: ["/api/admin/whitelist"],
+    });
 
   const addEmailMutation = useMutation({
     mutationFn: async (email: string) => {
-      await apiRequest("/api/admin/whitelist", "POST", { email });
+      // 🔧 FIX: method first, then path
+      await apiRequest("POST", "/api/admin/whitelist", { email });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/whitelist"] });
@@ -45,7 +60,11 @@ export default function Admin() {
 
   const removeEmailMutation = useMutation({
     mutationFn: async (email: string) => {
-      await apiRequest(`/api/admin/whitelist/${encodeURIComponent(email)}`, "DELETE");
+      // 🔧 FIX: method first, then path
+      await apiRequest(
+        "DELETE",
+        `/api/admin/whitelist/${encodeURIComponent(email)}`
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/whitelist"] });
@@ -107,8 +126,8 @@ export default function Admin() {
                 onChange={(e) => setNewEmail(e.target.value)}
                 data-testid="input-whitelist-email"
               />
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 size="icon"
                 disabled={addEmailMutation.isPending}
                 data-testid="button-add-whitelist"
@@ -118,7 +137,9 @@ export default function Admin() {
             </form>
 
             {whitelistLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Loading...
+              </p>
             ) : whitelist.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
                 No whitelisted emails yet
@@ -160,9 +181,13 @@ export default function Admin() {
           </CardHeader>
           <CardContent>
             {usersLoading ? (
-              <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
+              <p className="text-sm text-muted-foreground text-center py-4">
+                Loading...
+              </p>
             ) : users.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-4">No users yet</p>
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No users yet
+              </p>
             ) : (
               <Table>
                 <TableHeader>
@@ -173,15 +198,26 @@ export default function Admin() {
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
-                    <TableRow key={user.id} data-testid={`user-row-${user.email}`}>
-                      <TableCell className="font-medium">{user.email}</TableCell>
+                    <TableRow
+                      key={user.id}
+                      data-testid={`user-row-${user.email}`}
+                    >
+                      <TableCell className="font-medium">
+                        {user.email}
+                      </TableCell>
                       <TableCell>
                         {user.isAdmin === "yes" ? (
-                          <Badge variant="default" data-testid={`badge-admin-${user.email}`}>
+                          <Badge
+                            variant="default"
+                            data-testid={`badge-admin-${user.email}`}
+                          >
                             Admin
                           </Badge>
                         ) : (
-                          <Badge variant="secondary" data-testid={`badge-user-${user.email}`}>
+                          <Badge
+                            variant="secondary"
+                            data-testid={`badge-user-${user.email}`}
+                          >
                             User
                           </Badge>
                         )}
@@ -201,12 +237,13 @@ export default function Admin() {
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>
-            <strong>Email Whitelist:</strong> Add email addresses to allow users to sign in.
-            Only whitelisted emails can complete the authentication process.
+            <strong>Email Whitelist:</strong> Add email addresses to allow users
+            to sign in. Only whitelisted emails can complete the authentication
+            process.
           </p>
           <p>
-            <strong>Admin Status:</strong> To grant admin privileges to a user, you must manually
-            update their record in the database:
+            <strong>Admin Status:</strong> To grant admin privileges to a user,
+            you must manually update their record in the database:
           </p>
           <pre className="bg-muted p-3 rounded-md text-xs mt-2">
             UPDATE users SET is_admin = 'yes' WHERE email = 'user@example.com';
@@ -216,3 +253,4 @@ export default function Admin() {
     </div>
   );
 }
+
